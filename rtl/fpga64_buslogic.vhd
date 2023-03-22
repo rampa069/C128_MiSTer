@@ -72,6 +72,7 @@ entity fpga64_buslogic is
 		cpuData     : in unsigned(7 downto 0);
 		vicAddr     : in unsigned(15 downto 0);
 		vicData     : in unsigned(7 downto 0);
+		vicTurbo    : in std_logic;
 		sidData     : in unsigned(7 downto 0);
 		mmuData     : in unsigned(7 downto 0);
 		vdcData     : in unsigned(7 downto 0);
@@ -149,52 +150,38 @@ begin
 	rom23Bank <= "01"  & not cpuAddr(14) & cpuAddr(13) & cpuAddr(12);
 	romCBank  <= "1000" & not ((not cpslk_mode and c128_n) or (cpslk_mode and cpslk_sense));
 
-	process(ramData, ramDataFloat, vicData, sidData, mmuData, vdcData, colorData,
-		     cia1Data, cia2Data, cs_sysRomLoc, cs_romFLLoc, cs_romFHLoc, cs_romHLoc, cs_romLLoc,
-			  cs_ramLoc, cs_vicLoc, cs_sidLoc, cs_colorLoc, cs_mmuLLoc, cs_mmuHLoc, cs_vdcLoc,
-			  cs_cia1Loc, cs_cia2Loc, lastVicData,
-			  cs_ioELoc, cs_ioFLoc,
-			  io_rom, io_ext, io_data)
-	begin
-		-- If no hardware is addressed the bus is floating.
-		-- It will contain the last data read by the VIC. (if a C64 is shielded correctly)
-		dataToCpu <= lastVicData;
-		if cs_sysRomLoc = '1' then
-			dataToCpu <= ramData;
-		elsif cs_ramLoc = '1' then
-			dataToCpu <= ramData;
-		elsif cs_vicLoc = '1' then
-			dataToCpu <= vicData;
-		elsif cs_sidLoc = '1' then
-			dataToCpu <= sidData;
-		elsif (cs_mmuLLoc = '1' or cs_mmuHLoc = '1') then
-			dataToCpu <= mmuData;
-		elsif cs_vdcLoc = '1' then
-			dataToCpu <= vdcData;
-		elsif cs_colorLoc = '1' then
-			dataToCpu(3 downto 0) <= colorData;
-		elsif cs_cia1Loc = '1' then
-			dataToCpu <= cia1Data;
-		elsif cs_cia2Loc = '1' then
-			dataToCpu <= cia2Data;
-		elsif cs_romLLoc = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_romHLoc = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_romFLLoc = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_romFHLoc = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_ioELoc = '1' and io_rom = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_ioFLoc = '1' and io_rom = '1' and ramDataFloat = '0' then
-			dataToCpu <= ramData;
-		elsif cs_ioELoc = '1' and io_ext = '1' then
-			dataToCpu <= io_data;
-		elsif cs_ioFLoc = '1' and io_ext = '1' then
-			dataToCpu <= io_data;
-		end if;
-	end process;
+--	process(ramData, ramDataFloat, vicData, sidData, mmuData, vdcData, colorData,
+--		     cia1Data, cia2Data, cs_sysRomLoc, cs_romFLLoc, cs_romFHLoc, cs_romHLoc, cs_romLLoc,
+--			  cs_ramLoc, cs_vicLoc, cs_sidLoc, cs_colorLoc, cs_mmuLLoc, cs_mmuHLoc, cs_vdcLoc,
+--			  cs_cia1Loc, cs_cia2Loc, lastVicData,
+--			  cs_ioELoc, cs_ioFLoc,
+--			  io_rom, io_ext, io_data)
+--	begin
+
+	-- If no hardware is addressed the bus is floating.
+	-- It will contain the last data read by the VIC. (if a C64 is shielded correctly)
+	
+	dataToCpu <= ramData when cs_sysRomLoc = '1' else
+	             ramData when cs_ramLoc    = '1' else
+					 vicData when cs_vicloc    = '1' else
+					 sidData when cs_sidLoc    = '1' else
+					 mmudata when (cs_mmuLLoc = '1' or cs_mmuHLoc = '1') else
+					 vdcData when cs_VdcLoc    = '1' else
+					 "ZZZZ" & colordata when cs_ColorLoc = '1' else
+					 cia1Data when cs_Cia1Loc  = '1' else
+					 cia2Data when cs_Cia2Loc  = '1' else
+					 ramData when (cs_romLLoc = '1' and ramDataFloat = '0') else
+					 ramData when (cs_romHLoc = '1' and ramDataFloat = '0') else
+					 ramData when (cs_romFLLoc = '1' and ramDataFloat = '0')else
+					 ramdata when (cs_romFHLoc = '1' and ramDataFloat = '0')else
+					 ramdata when (cs_ioELoc = '1' and io_rom = '1' and ramDataFloat = '0') else
+					 ramdata when (cs_ioFLoc = '1' and io_rom = '1' and ramDataFloat = '0') else
+					 io_Data when (cs_ioELoc = '1' and io_ext = '1') else
+					 io_Data when (cs_ioFLoc = '1' and io_ext = '1') else
+					 lastVicData;
+					 
+
+	--end process;
 
 	ultimax <= exrom and (not game);
 
@@ -433,7 +420,9 @@ begin
 		else
 			-- The VIC-II has the bus, but only when aec is asserted
 			if aec = '1' then
-				currentAddr <= vicBank & vicAddr;
+				currentAddr <=  vicbank & vicAddr;
+			elsif (cs_vicLoc and io_enable)='1' and vicTurbo='1' then
+			        currentAddr <=  vicbank & vicAddr;
 			else
 				currentAddr <= cpuBank & tAddr;
 			end if;

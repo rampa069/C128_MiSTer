@@ -36,7 +36,7 @@ entity video_vicii_656x is
 		-- phi = 1 is CPU cycle (only used by VIC when BA is low)
 		phi : in std_logic;
 		enaData : in std_logic;
-		enaPixel : in std_logic;
+		enaPix : in std_logic;
 
 		baSync : in std_logic;
 		ba: out std_logic;
@@ -107,6 +107,7 @@ architecture rtl of video_vicii_656x is
 	constant PIX_DELAY : integer := 5;
 
 -- State machine
+   signal enaPixel : std_logic;
 	signal lastLineFlag : boolean; -- True for on last line of the frame.
 	signal vicCycle : vicCycles := cycleRefresh1;
 	signal sprite : unsigned(2 downto 0) := "000";
@@ -298,12 +299,14 @@ begin
 -- -----------------------------------------------------------------------
 	ba <= baLoc;
 	vicAddr <= vicAddrReg when registeredAddress else vicAddrLoc;
-	hSync <= hBlanking;
+	--hSync <= hBlanking and not test_reg;
 	vSync <= vBlanking;
+	hSync <= hBlanking;
+	--vSync <= vBlanking;
 	irq_n <= not IRQ;
 	turbo_state <= turbo_reg;
 	ko <= k_reg;
-
+   enaPixel <= enapix; -- and not turbo_reg;
 -- -----------------------------------------------------------------------
 -- chip-select signals and data/address bus latch
 -- -----------------------------------------------------------------------
@@ -713,7 +716,9 @@ vicStateMachine: process(clk)
 		addrValid <= '0';
 		if phi = '0'
 		or baCnt(2) = '1' then
-			addrValid <= '1';
+			if turbo_reg='0' then 
+			  addrValid <= '1';
+			end if;
 		end if;
 	end process;
 
@@ -1661,9 +1666,9 @@ writeRegisters: process(clk)
 							k_reg <= diRegisters(2 downto 0);
 						end if;
 					when "110000" => 
-						if vic2e = '1' or turbo_en = '1' then
+						if vic2e = '1' then
 							turbo_reg <= diRegisters(0);
-							test_reg <= diRegisters(1) and vic2e;
+							test_reg  <= diRegisters(1);
 						end if;
 					when others => null;
 					end case;
@@ -1734,8 +1739,8 @@ readRegisters: process(clk)
 			                 else
 			                    do <= (others => '1');
 			                 end if;
-			when "110000" => if vic2e = '1' or turbo_en ='1' then
-									  do <= "111111" & (test_reg or not vic2e) & turbo_reg;
+			when "110000" => if vic2e = '1' then
+									  do <= "111111" & test_reg  & turbo_reg;
 								  else
 								     do <= (others => '1');
 								  end if;

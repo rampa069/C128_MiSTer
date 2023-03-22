@@ -91,6 +91,7 @@ port(
    vicR        : out unsigned(7 downto 0);
    vicG        : out unsigned(7 downto 0);
    vicB        : out unsigned(7 downto 0);
+	vicpalette  : in  std_logic_vector(1 downto 0);
 
    vdcHsync    : out std_logic;
    vdcVsync    : out std_logic;
@@ -680,6 +681,7 @@ port map (
    tAddr => tAddr,
    cpuBank => cpuBank,
    vicBank => vicBank,
+	vicTurbo => turbo_state,
    cpslk_sense => cpslk_sense_cpu,
 
    game => mmu_game,
@@ -759,7 +761,7 @@ process(clk32)
 begin
    if rising_edge(clk32) then
       if phi0_cpu = '1' then
-         if cpuWe = '1' and cs_vic = '1' then
+         if cpuWe = '1' then --and cs_vic = '1' then
             vicBus <= cpuDo;
          else
             vicBus <= x"FF";
@@ -772,8 +774,10 @@ vicDi <= ramDin;
 -- In the first three cycles after BA went low, the VIC reads
 -- $ff as character pointers and
 -- as color information the lower 4 bits of the opcode after the access to $d011.
-vicDiAec <= vicBus when aec = '0' else vicDi;
+
+vicDiAec <= cpuDi when aec = '0'  else vicDi;
 colorDataAec <= cpuDi(3 downto 0) when aec = '0' else colorData;
+
 
 vic: entity work.video_vicii_656x
 generic map (
@@ -785,7 +789,7 @@ generic map (
 port map (
    clk => clk32,
    reset => reset,
-	enaPixel => enablePixel,
+	enaPix => enablePixel,
    enaData => enableVic,
    phi => phi0_cpu,
 
@@ -833,7 +837,8 @@ port map (
    index => vicColorIndex,
    r => vicRo,
    g => vicGo,
-   b => vicBo
+   b => vicBo,
+	palette => vicpalette
 );
 
 vicJailbarAdjust: video_vicIIe_jb
@@ -878,8 +883,8 @@ begin
 end process;
 
 -- emulate only the first glitch (enough for Undead from Emulamer)
-vicAddr(15 downto 14) <= "11" when (pure64 = '1' and (vicAddr1514 xor not cia2_pao(1 downto 0)) = "11") and (cia2_pao(0) /= cia2_pao(1)) else not unsigned(cia2_pao(1 downto 0));
-
+--vicAddr(15 downto 14) <= "11" when (pure64 = '1' and (vicAddr1514 xor not cia2_pao(1 downto 0)) = "11") and (cia2_pao(0) /= cia2_pao(1)) else not unsigned(cia2_pao(1 downto 0));
+vicAddr(15 downto 14) <= "11" when pure64 = '1' else not cia2_pao(1 downto 0);
 -- Pixel timing
 process(clk32)
 begin
@@ -1217,7 +1222,7 @@ begin
          turbo_en <= turbo_mode(0);
          turbo_m <= "000";
          if dma_req = '0' then
-            if ((turbo_mode(0) and turbo_state) = '1' or turbo_mode(1) = '1') then
+            if (turbo_state = '1') then
                case turbo_speed is
                   when "00" => turbo_m <= "010";
                   when "01" => turbo_m <= "110";
